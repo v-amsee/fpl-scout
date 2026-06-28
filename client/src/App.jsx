@@ -30,6 +30,27 @@ function App() {
     }
   };
 
+const [recommendation, setRecommendation] = useState(null);
+const [aiLoading, setAiLoading] = useState(false);
+
+const handleRecommend = async () => {
+  if (!squad || !fixtures) return;
+  setAiLoading(true);
+  try {
+    const res = await fetch('/api/ai/recommend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ squad, fixtures }),
+    });
+    const data = await res.json();
+    setRecommendation(data.recommendation);
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setAiLoading(false);
+  }
+};
+
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       {/* Header */}
@@ -79,6 +100,29 @@ function App() {
           <SquadView squad={squad} fixtures={fixtures} />
         )}
       </div>
+      {squad && (
+  <div className="mt-6">
+    <button
+      onClick={handleRecommend}
+      disabled={aiLoading}
+      className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold px-8 py-4 rounded-xl transition-colors flex items-center justify-center gap-3"
+    >
+      <span>🤖</span>
+      {aiLoading ? 'Analysing your squad...' : 'Get AI Transfer Recommendations'}
+    </button>
+
+    {recommendation && (
+      <div className="mt-4 bg-gray-900 border border-purple-800 rounded-2xl p-6">
+        <h3 className="text-purple-400 font-semibold mb-4 flex items-center gap-2">
+          <span>⚡</span> AI Recommendations
+        </h3>
+        <pre className="text-gray-200 text-sm whitespace-pre-wrap font-sans leading-relaxed">
+          {recommendation}
+        </pre>
+      </div>
+    )}
+  </div>
+)}
     </div>
   );
 }
