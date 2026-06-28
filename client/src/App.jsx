@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { getSquad, getFixtures } from './services/api';
 import SquadView from './components/SquadView';
+import AuthModal from './components/AuthModal';
 
 function App() {
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
+  const [showAuth, setShowAuth] = useState(false);
   const [teamId, setTeamId] = useState('');
   const [gameweek, setGameweek] = useState('38');
   const [squad, setSquad] = useState(null);
@@ -13,6 +17,35 @@ function App() {
   const [recommendation, setRecommendation] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const { connected } = useWebSocket();
+
+  useEffect(() => {
+    const savedToken = localStorage.getItem('fplscout_token');
+    const savedUser = localStorage.getItem('fplscout_user');
+    if (savedToken && savedUser) {
+      const parsedUser = JSON.parse(savedUser);
+      setToken(savedToken);
+      setUser(parsedUser);
+      if (parsedUser.fplTeamId) setTeamId(parsedUser.fplTeamId);
+    }
+  }, []);
+
+  const handleAuth = (user, token) => {
+    setUser(user);
+    setToken(token);
+    if (user.fplTeamId) setTeamId(user.fplTeamId);
+    setShowAuth(false);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('fplscout_token');
+    localStorage.removeItem('fplscout_user');
+    setUser(null);
+    setToken(null);
+    setSquad(null);
+    setFixtures(null);
+    setRecommendation(null);
+    setTeamId('');
+  };
 
   const handleSearch = async () => {
     if (!teamId) return;
@@ -39,7 +72,10 @@ function App() {
     try {
       const res = await fetch('/api/ai/recommend', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
         body: JSON.stringify({ squad, fixtures }),
       });
       const data = await res.json();
@@ -54,6 +90,13 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col">
 
+      {showAuth && (
+        <AuthModal
+          onAuth={handleAuth}
+          onClose={() => setShowAuth(false)}
+        />
+      )}
+
       {/* Header */}
       <header className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -63,18 +106,47 @@ function App() {
             <p className="text-xs text-gray-400 leading-tight">AI Fantasy Football Assistant</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-red-400'}`} />
-          <span className="text-xs text-gray-400">{connected ? 'Live' : 'Offline'}</span>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-red-400'}`} />
+            <span className="text-xs text-gray-400">{connected ? 'Live' : 'Offline'}</span>
+          </div>
+          {user ? (
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-400">{user.email}</span>
+              <button
+                onClick={handleLogout}
+                className="text-xs text-gray-500 hover:text-red-400 transition-colors"
+              >
+                Logout
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAuth(true)}
+              className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-lg transition-colors"
+            >
+              Login / Register
+            </button>
+          )}
         </div>
       </header>
 
-      {/* Main content */}
+      {/* Main */}
       <main className="flex-1 max-w-4xl w-full mx-auto px-6 py-10 pb-20">
 
         {/* Search card */}
         <div className="bg-gray-900 rounded-2xl p-8 border border-gray-800">
-          <h2 className="text-lg font-semibold mb-6 text-gray-100">Enter your FPL details</h2>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold text-gray-100">Enter your FPL details</h2>
+            {!user && (
+              <p className="text-xs text-gray-500">
+                <button onClick={() => setShowAuth(true)} className="text-green-400 hover:text-green-300">
+                  Login
+                </button> to save your team ID
+              </p>
+            )}
+          </div>
           <div className="flex gap-4 flex-wrap">
             <input
               type="text"
@@ -102,12 +174,10 @@ function App() {
           {error && <p className="text-red-400 mt-4 text-sm">{error}</p>}
         </div>
 
-        {/* Squad view */}
         {squad && fixtures && (
           <SquadView squad={squad} fixtures={fixtures} />
         )}
 
-        {/* AI recommendations */}
         {squad && (
           <div className="mt-8">
             <button
@@ -134,7 +204,6 @@ function App() {
 
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-gray-800 py-6 text-center">
         <p className="text-xs text-gray-500">
           FPL Scout is not affiliated with the Premier League or Fantasy Premier League.
