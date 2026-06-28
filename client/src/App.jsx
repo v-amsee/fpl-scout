@@ -10,6 +10,8 @@ function App() {
   const [fixtures, setFixtures] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [recommendation, setRecommendation] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
   const { connected } = useWebSocket();
 
   const handleSearch = async () => {
@@ -23,6 +25,7 @@ function App() {
       ]);
       setSquad(squadRes.data.squad);
       setFixtures(fixturesRes.data.teamFixtures);
+      setRecommendation(null);
     } catch (err) {
       setError('Could not load squad. Check your team ID and gameweek.');
     } finally {
@@ -30,35 +33,35 @@ function App() {
     }
   };
 
-const [recommendation, setRecommendation] = useState(null);
-const [aiLoading, setAiLoading] = useState(false);
-
-const handleRecommend = async () => {
-  if (!squad || !fixtures) return;
-  setAiLoading(true);
-  try {
-    const res = await fetch('/api/ai/recommend', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ squad, fixtures }),
-    });
-    const data = await res.json();
-    setRecommendation(data.recommendation);
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setAiLoading(false);
-  }
-};
+  const handleRecommend = async () => {
+    if (!squad || !fixtures) return;
+    setAiLoading(true);
+    try {
+      const res = await fetch('/api/ai/recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ squad, fixtures }),
+      });
+      const data = await res.json();
+      setRecommendation(data.recommendation);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen bg-gray-950 text-white flex flex-col">
+
       {/* Header */}
       <header className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-2xl">⚽</span>
-          <h1 className="text-xl font-bold text-white">FPL Scout</h1>
-          <span className="text-xs text-gray-400 ml-2">AI Fantasy Football Assistant</span>
+          <div>
+            <h1 className="text-xl font-bold text-white leading-tight">FPL Scout</h1>
+            <p className="text-xs text-gray-400 leading-tight">AI Fantasy Football Assistant</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-red-400'}`} />
@@ -66,8 +69,10 @@ const handleRecommend = async () => {
         </div>
       </header>
 
-      {/* Search */}
-      <div className="max-w-4xl mx-auto px-6 py-10">
+      {/* Main content */}
+      <main className="flex-1 max-w-4xl w-full mx-auto px-6 py-10 pb-20">
+
+        {/* Search card */}
         <div className="bg-gray-900 rounded-2xl p-8 border border-gray-800">
           <h2 className="text-lg font-semibold mb-6 text-gray-100">Enter your FPL details</h2>
           <div className="flex gap-4 flex-wrap">
@@ -76,6 +81,7 @@ const handleRecommend = async () => {
               placeholder="Team ID (e.g. 840512)"
               value={teamId}
               onChange={e => setTeamId(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSearch()}
               className="flex-1 min-w-48 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500"
             />
             <input
@@ -96,33 +102,49 @@ const handleRecommend = async () => {
           {error && <p className="text-red-400 mt-4 text-sm">{error}</p>}
         </div>
 
+        {/* Squad view */}
         {squad && fixtures && (
           <SquadView squad={squad} fixtures={fixtures} />
         )}
-      </div>
-      {squad && (
-  <div className="mt-6">
-    <button
-      onClick={handleRecommend}
-      disabled={aiLoading}
-      className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold px-8 py-4 rounded-xl transition-colors flex items-center justify-center gap-3"
-    >
-      <span>🤖</span>
-      {aiLoading ? 'Analysing your squad...' : 'Get AI Transfer Recommendations'}
-    </button>
 
-    {recommendation && (
-      <div className="mt-4 bg-gray-900 border border-purple-800 rounded-2xl p-6">
-        <h3 className="text-purple-400 font-semibold mb-4 flex items-center gap-2">
-          <span>⚡</span> AI Recommendations
-        </h3>
-        <pre className="text-gray-200 text-sm whitespace-pre-wrap font-sans leading-relaxed">
-          {recommendation}
-        </pre>
-      </div>
-    )}
-  </div>
-)}
+        {/* AI recommendations */}
+        {squad && (
+          <div className="mt-8">
+            <button
+              onClick={handleRecommend}
+              disabled={aiLoading}
+              className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold px-8 py-4 rounded-xl transition-colors flex items-center justify-center gap-3"
+            >
+              <span>🤖</span>
+              {aiLoading ? 'Analysing your squad...' : 'Get AI Transfer Recommendations'}
+            </button>
+
+            {recommendation && (
+              <div className="mt-4 bg-gray-900 border border-purple-800 rounded-2xl p-6">
+                <h3 className="text-purple-400 font-semibold mb-4 flex items-center gap-2">
+                  <span>⚡</span> AI Recommendations
+                </h3>
+                <pre className="text-gray-200 text-sm whitespace-pre-wrap font-sans leading-relaxed">
+                  {recommendation}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
+
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-gray-800 py-6 text-center">
+        <p className="text-xs text-gray-500">
+          FPL Scout is not affiliated with the Premier League or Fantasy Premier League.
+          Data sourced from the official FPL API.
+        </p>
+        <p className="text-xs text-gray-600 mt-1">
+          &copy; {new Date().getFullYear()} FPL Scout
+        </p>
+      </footer>
+
     </div>
   );
 }
