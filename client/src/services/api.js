@@ -12,3 +12,8 @@ export const getFixtures = () =>
 
 export const getBootstrap = () =>
   api.get('/fpl/bootstrap');
+
+export const getHistory = (token) =>
+  api.get('/ai/history', {
+    headers: { Authorization: `Bearer ${token}` }
+  });

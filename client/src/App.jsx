@@ -16,6 +16,8 @@ function App() {
   const [error, setError] = useState(null);
   const [recommendation, setRecommendation] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
   const { connected } = useWebSocket();
 
   useEffect(() => {
@@ -45,6 +47,8 @@ function App() {
     setFixtures(null);
     setRecommendation(null);
     setTeamId('');
+    setHistory([]);
+    setShowHistory(false);
   };
 
   const handleSearch = async () => {
@@ -74,9 +78,9 @@ function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` }),
+          ...(token && { Authorization: `Bearer ${token}` }),
         },
-        body: JSON.stringify({ squad, fixtures }),
+        body: JSON.stringify({ squad, fixtures, gameweek }),
       });
       const data = await res.json();
       setRecommendation(data.recommendation);
@@ -84,6 +88,20 @@ function App() {
       console.error(err);
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  const loadHistory = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/ai/history', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setHistory(data.history || []);
+      setShowHistory(true);
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -141,9 +159,13 @@ function App() {
             <h2 className="text-lg font-semibold text-gray-100">Enter your FPL details</h2>
             {!user && (
               <p className="text-xs text-gray-500">
-                <button onClick={() => setShowAuth(true)} className="text-green-400 hover:text-green-300">
+                <button
+                  onClick={() => setShowAuth(true)}
+                  className="text-green-400 hover:text-green-300"
+                >
                   Login
-                </button> to save your team ID
+                </button>{' '}
+                to save your team ID
               </p>
             )}
           </div>
@@ -174,10 +196,12 @@ function App() {
           {error && <p className="text-red-400 mt-4 text-sm">{error}</p>}
         </div>
 
+        {/* Squad */}
         {squad && fixtures && (
           <SquadView squad={squad} fixtures={fixtures} />
         )}
 
+        {/* AI recommendations */}
         {squad && (
           <div className="mt-8">
             <button
@@ -193,6 +217,9 @@ function App() {
               <div className="mt-4 bg-gray-900 border border-purple-800 rounded-2xl p-6">
                 <h3 className="text-purple-400 font-semibold mb-4 flex items-center gap-2">
                   <span>⚡</span> AI Recommendations
+                  {user && (
+                    <span className="text-xs text-gray-500 ml-auto">Saved to your history</span>
+                  )}
                 </h3>
                 <pre className="text-gray-200 text-sm whitespace-pre-wrap font-sans leading-relaxed">
                   {recommendation}
@@ -201,6 +228,44 @@ function App() {
             )}
           </div>
         )}
+
+        {/* History — logged in users only */}
+{user && (
+  <div className="mt-8">
+    <button
+      onClick={() => showHistory ? setShowHistory(false) : loadHistory()}
+      className="text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+    >
+      <span>📋</span>
+      {showHistory ? 'Hide recommendation history' : 'View recommendation history'}
+    </button>
+
+    {showHistory && history.length > 0 && (
+      <div className="mt-4 space-y-4">
+        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+          Past Recommendations
+        </h3>
+        {history.map(h => (
+          <div key={h.id} className="bg-gray-900 border border-gray-700 rounded-xl p-5">
+            <div className="flex justify-between items-center mb-3">
+              <span className="text-xs text-gray-400">Gameweek {h.gameweek}</span>
+              <span className="text-xs text-gray-500">
+                {new Date(h.created_at).toLocaleDateString()}
+              </span>
+            </div>
+            <pre className="text-gray-300 text-xs whitespace-pre-wrap font-sans leading-relaxed">
+              {h.recommendation}
+            </pre>
+          </div>
+        ))}
+      </div>
+    )}
+
+    {showHistory && history.length === 0 && (
+      <p className="text-xs text-gray-500 mt-2">No recommendations saved yet.</p>
+    )}
+  </div>
+)}
 
       </main>
 

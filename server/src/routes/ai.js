@@ -1,26 +1,39 @@
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
+const pool = require('../db');
+const jwt = require('jsonwebtoken');
 const router = express.Router();
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const JWT_SECRET = process.env.JWT_SECRET || 'fplscout_dev_secret';
+
+function getOptionalUser(req) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+    const token = authHeader.split(' ')[1];
+    return jwt.verify(token, JWT_SECRET);
+  } catch {
+    return null;
+  }
+}
 
 router.post('/recommend', async (req, res) => {
-  const { squad, fixtures } = req.body;
+  const { squad, fixtures, gameweek } = req.body;
 
   if (!squad || !fixtures) {
     return res.status(400).json({ error: 'Squad and fixtures data required' });
   }
 
-  // Build a clean summary of the squad to send to Claude
-  // We don't send the raw JSON — too many tokens. We summarise it.
+  const user = getOptionalUser(req);
+
   const squadSummary = squad
-    .filter(p => p.multiplier > 0) // starting 11 only
+    .filter(p => p.multiplier > 0)
     .map(p => {
       const teamFix = fixtures.find(f => f.teamId === p.teamId);
       const nextFixtures = teamFix?.upcoming
         .map(f => `${f.isHome ? '' : '@'}${f.opponent}(${f.difficultyLabel})`)
         .join(', ') || 'unknown';
-
       return `${p.name} | ${p.position} | ${p.team} | £${p.price}m | Form: ${p.form} | xG: ${p.xG} | xA: ${p.xA} | Status: ${p.status === 'a' ? 'fit' : p.news} | Next fixtures: ${nextFixtures}`;
     })
     .join('\n');
@@ -38,7 +51,7 @@ IN: [suggested replacement] — [one sentence reason]
 IMPACT: [one sentence on expected points impact]
 
 TRANSFER 2:
-OUT: [player name] — [one sentence reason]  
+OUT: [player name] — [one sentence reason]
 IN: [suggested replacement] — [one sentence reason]
 IMPACT: [one sentence on expected points impact]
 
@@ -47,7 +60,7 @@ OUT: [player name] — [one sentence reason]
 IN: [suggested replacement] — [one sentence reason]
 IMPACT: [one sentence on expected points impact]
 
-Keep each reason concise and specific. Focus on fixture difficulty, form, xG/xA, and value for money. Only suggest realistic transfers within FPL budget constraints.`;
+Keep each reason concise and specific. Focus on fixture difficulty, form, xG/xA, and value for money.`;
 
   try {
     const message = await client.messages.create({
@@ -57,11 +70,37 @@ Keep each reason concise and specific. Focus on fixture difficulty, form, xG/xA,
     });
 
     const recommendation = message.content[0].text;
-    res.json({ recommendation });
+
+    // Save to DB if user is logged in
+    if (user) {
+      await pool.query(
+        'INSERT INTO recommendations (user_id, gameweek, squad_snapshot, recommendation) VALUES ($1, $2, $3, $4)',
+        [user.userId, gameweek || 0, JSON.stringify(squad), recommendation]
+      );
+    }
+
+    res.json({ recommendation, saved: !!user });
 
   } catch (error) {
     console.error('Claude API error:', error.message);
     res.status(500).json({ error: 'Failed to get AI recommendations' });
+  }
+});
+
+// Get recommendation history for logged in user
+router.get('/history', async (req, res) => {
+  const user = getOptionalUser(req);
+  if (!user) return res.status(401).json({ error: 'Login to view history' });
+
+  try {
+    const result = await pool.query(
+      'SELECT id, gameweek, recommendation, created_at FROM recommendations WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10',
+      [user.userId]
+    );
+    res.json({ history: result.rows });
+  } catch (error) {
+    console.error('History error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch history' });
   }
 });
 
