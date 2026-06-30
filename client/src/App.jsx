@@ -105,6 +105,28 @@ function App() {
     }
   };
 
+  const saveTeamId = async () => {
+    if (!token || !teamId) return;
+    try {
+      const res = await fetch('/api/auth/team', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ fplTeamId: teamId }),
+      });
+      const data = await res.json();
+      if (data.user) {
+        const updatedUser = { ...user, fplTeamId: teamId };
+        setUser(updatedUser);
+        localStorage.setItem('fplscout_user', JSON.stringify(updatedUser));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col">
 
@@ -194,6 +216,19 @@ function App() {
             </button>
           </div>
           {error && <p className="text-red-400 mt-4 text-sm">{error}</p>}
+
+          {/* Save team ID button */}
+          {squad && user && user.fplTeamId !== teamId && (
+            <p className="text-xs mt-3">
+              <button
+                onClick={saveTeamId}
+                className="text-green-400 hover:text-green-300 underline"
+              >
+                Save {teamId} as my default team
+              </button>
+              <span className="text-gray-500"> — loads automatically next login</span>
+            </p>
+          )}
         </div>
 
         {/* Squad */}
@@ -220,52 +255,71 @@ function App() {
                   {user && (
                     <span className="text-xs text-gray-500 ml-auto">Saved to your history</span>
                   )}
+                  <button
+                    onClick={() => setRecommendation(null)}
+                    className="ml-auto text-gray-500 hover:text-white text-lg leading-none"
+                  >
+                    x
+                  </button>
                 </h3>
                 <pre className="text-gray-200 text-sm whitespace-pre-wrap font-sans leading-relaxed">
                   {recommendation}
                 </pre>
               </div>
             )}
+
+            {/* Login prompt for non-logged in users */}
+            {recommendation && !user && (
+              <p className="text-xs text-gray-500 mt-3 text-center">
+                <button
+                  onClick={() => setShowAuth(true)}
+                  className="text-green-400 hover:text-green-300"
+                >
+                  Login or register
+                </button>
+                {' '}to save recommendations to your history
+              </p>
+            )}
           </div>
         )}
 
         {/* History — logged in users only */}
-{user && (
-  <div className="mt-8">
-    <button
-      onClick={() => showHistory ? setShowHistory(false) : loadHistory()}
-      className="text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-2"
-    >
-      <span>📋</span>
-      {showHistory ? 'Hide recommendation history' : 'View recommendation history'}
-    </button>
+        {user && (
+          <div className="mt-8">
+            <button
+              onClick={() => showHistory ? setShowHistory(false) : loadHistory()}
+              className="text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+            >
+              <span>📋</span>
+              {showHistory ? 'Hide recommendation history' : 'View recommendation history'}
+            </button>
 
-    {showHistory && history.length > 0 && (
-      <div className="mt-4 space-y-4">
-        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-          Past Recommendations
-        </h3>
-        {history.map(h => (
-          <div key={h.id} className="bg-gray-900 border border-gray-700 rounded-xl p-5">
-            <div className="flex justify-between items-center mb-3">
-              <span className="text-xs text-gray-400">Gameweek {h.gameweek}</span>
-              <span className="text-xs text-gray-500">
-                {new Date(h.created_at).toLocaleDateString()}
-              </span>
-            </div>
-            <pre className="text-gray-300 text-xs whitespace-pre-wrap font-sans leading-relaxed">
-              {h.recommendation}
-            </pre>
+            {showHistory && history.length > 0 && (
+              <div className="mt-4 space-y-4">
+                <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+                  Past Recommendations
+                </h3>
+                {history.map(h => (
+                  <div key={h.id} className="bg-gray-900 border border-gray-700 rounded-xl p-5">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-xs text-gray-400">Gameweek {h.gameweek}</span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(h.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <pre className="text-gray-300 text-xs whitespace-pre-wrap font-sans leading-relaxed">
+                      {h.recommendation}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {showHistory && history.length === 0 && (
+              <p className="text-xs text-gray-500 mt-2">No recommendations saved yet.</p>
+            )}
           </div>
-        ))}
-      </div>
-    )}
-
-    {showHistory && history.length === 0 && (
-      <p className="text-xs text-gray-500 mt-2">No recommendations saved yet.</p>
-    )}
-  </div>
-)}
+        )}
 
       </main>
 

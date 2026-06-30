@@ -32,7 +32,14 @@ wss.on('connection', (ws) => {
   console.log('Client connected via WebSocket');
   ws.send(JSON.stringify({ type: 'connected', message: 'FPL Scout live' }));
 
+  const heartbeat = setInterval(() => {
+    if (ws.readyState === ws.OPEN) {
+      ws.send(JSON.stringify({ type: 'ping' }));
+    }
+  }, 30000);
+
   ws.on('close', () => {
+    clearInterval(heartbeat);
     console.log('Client disconnected');
   });
 });

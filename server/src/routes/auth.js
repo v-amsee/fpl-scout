@@ -90,4 +90,32 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// Add Team Update
+
+router.put('/team', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: 'Not authenticated' });
+
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const { fplTeamId } = req.body;
+
+    await pool.query(
+      'UPDATE users SET fpl_team_id = $1 WHERE id = $2',
+      [fplTeamId, decoded.userId]
+    );
+
+    const result = await pool.query(
+      'SELECT id, email, fpl_team_id AS "fplTeamId" FROM users WHERE id = $1',
+      [decoded.userId]
+    );
+
+    res.json({ user: result.rows[0] });
+  } catch (err) {
+    console.error('Update team error:', err.message);
+    res.status(500).json({ error: 'Failed to update team ID' });
+  }
+});
+
 module.exports = router;
