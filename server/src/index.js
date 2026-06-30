@@ -1,4 +1,7 @@
 require('dotenv').config();
+console.log('PORT from env:', process.env.PORT);
+console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
+console.log('All env keys:', Object.keys(process.env).filter(k => !k.startsWith('npm_')));
 const express = require('express');
 const cors = require('cors');
 const { WebSocketServer } = require('ws');
