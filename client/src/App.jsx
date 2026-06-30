@@ -18,6 +18,7 @@ function App() {
   const [aiLoading, setAiLoading] = useState(false);
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [savedToHistory, setSavedToHistory] = useState(false);
   const { connected } = useWebSocket();
 
   useEffect(() => {
@@ -49,12 +50,14 @@ function App() {
     setTeamId('');
     setHistory([]);
     setShowHistory(false);
+    setSavedToHistory(false);
   };
 
   const handleSearch = async () => {
     if (!teamId) return;
     setLoading(true);
     setError(null);
+    setSavedToHistory(false);
     try {
       const [squadRes, fixturesRes] = await Promise.all([
         getSquad(teamId, gameweek),
@@ -73,6 +76,7 @@ function App() {
   const handleRecommend = async () => {
     if (!squad || !fixtures) return;
     setAiLoading(true);
+    setSavedToHistory(false);
     try {
       const res = await fetch('/api/ai/recommend', {
         method: 'POST',
@@ -80,10 +84,20 @@ function App() {
           'Content-Type': 'application/json',
           ...(token && { Authorization: `Bearer ${token}` }),
         },
-        body: JSON.stringify({ squad, fixtures, gameweek }),
+        body: JSON.stringify({ squad, fixtures, gameweek, teamId }),
       });
       const data = await res.json();
       setRecommendation(data.recommendation);
+      setSavedToHistory(data.saved || false);
+
+      // Auto refresh history if visible
+      if (showHistory && token) {
+        const histRes = await fetch('/api/ai/history', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const histData = await histRes.json();
+        setHistory(histData.history || []);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -252,8 +266,8 @@ function App() {
               <div className="mt-4 bg-gray-900 border border-purple-800 rounded-2xl p-6">
                 <h3 className="text-purple-400 font-semibold mb-4 flex items-center gap-2">
                   <span>⚡</span> AI Recommendations
-                  {user && (
-                    <span className="text-xs text-gray-500 ml-auto">Saved to your history</span>
+                  {savedToHistory && (
+                    <span className="text-xs text-gray-500 ml-2">Saved to history</span>
                   )}
                   <button
                     onClick={() => setRecommendation(null)}
@@ -268,7 +282,6 @@ function App() {
               </div>
             )}
 
-            {/* Login prompt for non-logged in users */}
             {recommendation && !user && (
               <p className="text-xs text-gray-500 mt-3 text-center">
                 <button
@@ -302,7 +315,14 @@ function App() {
                 {history.map(h => (
                   <div key={h.id} className="bg-gray-900 border border-gray-700 rounded-xl p-5">
                     <div className="flex justify-between items-center mb-3">
-                      <span className="text-xs text-gray-400">Gameweek {h.gameweek}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-gray-400">GW{h.gameweek}</span>
+                        {h.squad_snapshot?.teamId && (
+                          <span className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded">
+                            Team {h.squad_snapshot.teamId}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-xs text-gray-500">
                         {new Date(h.created_at).toLocaleDateString()}
                       </span>

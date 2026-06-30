@@ -19,7 +19,7 @@ function getOptionalUser(req) {
 }
 
 router.post('/recommend', async (req, res) => {
-  const { squad, fixtures, gameweek } = req.body;
+  const { squad, fixtures, gameweek, teamId } = req.body;
 
   if (!squad || !fixtures) {
     return res.status(400).json({ error: 'Squad and fixtures data required' });
@@ -71,11 +71,10 @@ Keep each reason concise and specific. Focus on fixture difficulty, form, xG/xA,
 
     const recommendation = message.content[0].text;
 
-    // Save to DB if user is logged in
     if (user) {
       await pool.query(
         'INSERT INTO recommendations (user_id, gameweek, squad_snapshot, recommendation) VALUES ($1, $2, $3, $4)',
-        [user.userId, gameweek || 0, JSON.stringify(squad), recommendation]
+        [user.userId, gameweek || 0, JSON.stringify({ teamId, squad }), recommendation]
       );
     }
 
@@ -87,17 +86,24 @@ Keep each reason concise and specific. Focus on fixture difficulty, form, xG/xA,
   }
 });
 
-// Get recommendation history for logged in user
 router.get('/history', async (req, res) => {
   const user = getOptionalUser(req);
   if (!user) return res.status(401).json({ error: 'Login to view history' });
 
   try {
     const result = await pool.query(
-      'SELECT id, gameweek, recommendation, created_at FROM recommendations WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10',
+      'SELECT id, gameweek, recommendation, squad_snapshot, created_at FROM recommendations WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10',
       [user.userId]
     );
-    res.json({ history: result.rows });
+
+    res.json({
+      history: result.rows.map(r => ({
+        ...r,
+        squad_snapshot: typeof r.squad_snapshot === 'string'
+          ? JSON.parse(r.squad_snapshot)
+          : r.squad_snapshot
+      }))
+    });
   } catch (error) {
     console.error('History error:', error.message);
     res.status(500).json({ error: 'Failed to fetch history' });
